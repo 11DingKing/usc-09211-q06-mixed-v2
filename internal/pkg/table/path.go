@@ -1342,6 +1342,14 @@ func (v *Vrf) ToGlobalPath(path *Path) error {
 	path.delPathAttr(bgp.BGP_ATTR_TYPE_NEXT_HOP)
 	mpreach, _ := bgp.NewPathAttributeMpReachNLRI(path.family, []bgp.PathNLRI{{NLRI: path.OriginInfo().nlri, ID: path.localID}}, nh)
 	path.setPathAttr(mpreach)
+	// The NLRI was rewritten in place (e.g. IPv4-unicast -> VPNv4 with the VRF
+	// RD; EVPN/MUP only had their RD filled in). The cached string in originInfo
+	// still describes the pre-VRF NLRI, which for two VRFs sharing the same
+	// prefix is byte-identical. Keys derived from it (GetDestLocalKey,
+	// GetLocalKey) would then alias distinct VPN paths across VRFs, dropping
+	// advertisements and withdrawals during message coalescing and RIB-out
+	// bookkeeping. Refresh the cache so keys carry the RD-scoped identity.
+	path.OriginInfo().nlriString = path.OriginInfo().nlri.String()
 	return nil
 }
 
